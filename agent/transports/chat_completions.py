@@ -479,6 +479,19 @@ class ChatCompletionsTransport(ProviderTransport):
         """
         _profile = params.get("provider_profile")
         sanitized = self.convert_messages(messages, model=model, base_url=params.get("base_url"), provider_profile=_profile)
+
+        # Direct Z.AI endpoints reject some branded system-prompt variants as
+        # provider-side 429/code-1305 failures. Rewrite only the outbound copy;
+        # cached prompts and conversation history remain byte-for-byte intact.
+        from agent.zai_prompt_policy import apply_zai_prompt_policy
+
+        sanitized = apply_zai_prompt_policy(
+            sanitized,
+            provider=params.get("provider_name", ""),
+            model=model,
+            base_url=params.get("base_url", ""),
+        )
+
         if _profile:
             return self._build_kwargs_from_profile(_profile, model, sanitized, tools, params)
 

@@ -1508,8 +1508,10 @@ def _build_chat_completions_kwargs(agent, api_messages, tools_for_api, reasoning
         lmstudio_reasoning_options=agent._lmstudio_reasoning_options_cached() if _is_lmstudio else None,
         qwen_session_metadata=_qwen_meta)
     if _profile:
-        # Profiles handle per-provider quirks via hooks fed the context above.
-        return transport.build_kwargs(provider_profile=_profile, **_common)
+        # Profiles handle per-provider quirks via hooks fed the context above;
+        # provider_name stays forwarded so endpoint-gated policies (Z.AI) still match.
+        return transport.build_kwargs(provider_profile=_profile,
+            provider_name=getattr(agent, "provider", "") or "", **_common)
 
     # Legacy flag path: only for a provider absent from the providers/ registry.
     return transport.build_kwargs(
