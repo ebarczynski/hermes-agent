@@ -1,0 +1,59 @@
+name: Fork weekly rebase
+
+# Fork-only housekeeping: replay the carried commits (the Z.AI prompt policy,
+# this workflow) on top of the latest NousResearch main. Never runs upstream —
+# upstream workflows reference NousResearch secrets and are disabled on forks.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # Mondays 06:00 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fork-rebase
+  cancel-in-progress: false
+
+jobs:
+  rebase:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # v7.0.1
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Configure git identity
+        run: |
+          git config user.name "fork-rebase-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Fetch upstream
+        run: |
+          git remote add upstream https://github.com/NousResearch/hermes-agent.git
+          git fetch upstream main
+
+      - name: Rebase onto upstream main
+        id: rebase
+        run: |
+          set -euo pipefail
+          base="$(git merge-base HEAD upstream/main)"
+          if [ "$base" = "$(git rev-parse upstream/main)" ]; then
+            echo "Upstream unchanged since the last rebase — nothing to do."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if git rebase upstream/main; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            git rebase --abort
+            echo "::error::Rebase onto upstream/main hit conflicts. Manual rebase required: the carried patch needs adaptation to the new upstream code. Run 'git fetch upstream main && git rebase upstream/main' locally, resolve, test, and force-push."
+            exit 1
+          fi
+
+      - name: Push rebased main
+        if: steps.rebase.outputs.changed == 'true'
+        run: git push --force-with-lease origin main
