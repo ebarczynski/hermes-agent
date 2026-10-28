@@ -11,6 +11,9 @@ on:
 
 permissions:
   contents: write
+  # The rebase replays upstream's own .github/workflows/* changes; without this
+  # scope GitHub rejects the push ("GitHub App ... without `workflows` permission").
+  workflows: write
 
 concurrency:
   group: fork-rebase
