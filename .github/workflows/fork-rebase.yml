@@ -11,9 +11,6 @@ on:
 
 permissions:
   contents: write
-  # The rebase replays upstream's own .github/workflows/* changes; without this
-  # scope GitHub rejects the push ("GitHub App ... without `workflows` permission").
-  workflows: write
 
 concurrency:
   group: fork-rebase
@@ -24,10 +21,23 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      # A rebasing of upstream always replays upstream's own .github/workflows/*
+      # changes, and GITHUB_TOKEN is refused for workflow-file pushes. A PAT with
+      # the repo's contents+workflow scopes is stored as FORK_REBASE_PAT; the
+      # `|| github.token` fallback keeps the workflow parseable before it is set
+      # (those runs fail at push with the documented remote-rejected error).
       - uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # v7.0.1
         with:
           fetch-depth: 0
           ref: main
+          token: ${{ secrets.FORK_REBASE_PAT || github.token }}
+
+      - name: Fail with a hint when the PAT secret is missing
+        if: env.FORK_REBASE_PAT == ''
+        run: |
+          echo "::error::Secret FORK_REBASE_PAT is not set — pushes touching .github/workflows/* will be remote-rejected. Add a PAT (contents+workflows scopes) as the FORK_REBASE_PAT secret."
+        env:
+          FORK_REBASE_PAT: ${{ secrets.FORK_REBASE_PAT }}
 
       - name: Configure git identity
         run: |
